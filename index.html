@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>國小英語單字練習 (Wonder World)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+            touch-action: pan-y;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
+        }
+        
+        /* Canvas Container */
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 200px; /* Base height */
+            background-color: #ffffff;
+            border-radius: 8px;
+            border: 2px solid #9ca3af;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+            touch-action: none; /* Critical for preventing scroll while drawing */
+        }
+
+        @media (min-width: 768px) {
+            .canvas-wrapper {
+                height: 250px;
+            }
+        }
+
+        /* Both canvases occupy the same space */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 6px; /* slightly less than wrapper to fit inside border */
+            touch-action: none;
+        }
+
+        /* Top canvas is for drawing */
+        .canvas-draw {
+            z-index: 10;
+            cursor: crosshair;
+        }
+
+        /* Bottom canvas is for lines */
+        .canvas-bg {
+            z-index: 1;
+            pointer-events: none; /* Let clicks pass through */
+        }
+
+        .tool-btn {
+            transition: all 0.2s;
+        }
+        .tool-btn:active {
+            transform: scale(0.95);
+        }
+        .tool-btn.active {
+            ring-width: 4px;
+            --tw-ring-color: #3b82f6; 
+            transform: translateY(-2px);
+        }
+
+        .color-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #d1d5db;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .color-dot:active { transform: scale(0.9); }
+        .color-dot.active { 
+            transform: scale(1.1); 
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+    </style>
+</head>
+<body class="pb-20">
+
+    <!-- SETUP SCREEN -->
+    <div id="setupScreen" class="min-h-screen flex flex-col items-center justify-center p-4 bg-blue-50">
+        <div class="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full">
+            <h1 class="text-3xl font-bold text-center text-blue-600 mb-6">
+                <i class="fas fa-pencil-alt mr-2"></i>英語單字練習生成器
+            </h1>
+            
+            <div class="mb-6">
+                <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">選擇冊數 (Book Selection)</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center space-x-2 p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-blue-600 book-select" value="WW1">
+                        <span>WW1 (第一冊)</span>
+                    </label>
+                    <label class="flex items-center space-x-2 p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-blue-600 book-select" value="WW2">
+                        <span>WW2 (第二冊)</span>
+                    </label>
+                    <label class="flex items-center space-x-2 p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-blue-600 book-select" value="WW3">
+                        <span>WW3 (第三冊)</span>
+                    </label>
+                    <label class="flex items-center space-x-2 p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-blue-600 book-select" value="WW4">
+                        <span>WW4 (第四冊)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">選擇單元 (Unit Selection)</h3>
+                <div class="grid grid-cols-4 gap-2">
+                    <label class="flex flex-col items-center p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-green-600 unit-select" value="U1">
+                        <span class="text-sm mt-1">Unit 1</span>
+                    </label>
+                    <label class="flex flex-col items-center p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-green-600 unit-select" value="U2">
+                        <span class="text-sm mt-1">Unit 2</span>
+                    </label>
+                    <label class="flex flex-col items-center p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-green-600 unit-select" value="U3">
+                        <span class="text-sm mt-1">Unit 3</span>
+                    </label>
+                    <label class="flex flex-col items-center p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" class="w-5 h-5 text-green-600 unit-select" value="U4">
+                        <span class="text-sm mt-1">Unit 4</span>
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 mt-2 text-center">
+                    (各冊單元主題不同，程式將自動對應您勾選的冊數主題)
+                </p>
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-xl shadow-lg transition transform hover:scale-105">
+                開始練習 (Start)
+            </button>
+            <p id="errorMsg" class="text-red-500 text-center mt-3 hidden font-bold">請至少選擇一冊和一個單元！</p>
+        </div>
+    </div>
+
+    <!-- MAIN APP SCREEN -->
+    <div id="appScreen" class="hidden max-w-4xl mx-auto p-2 md:p-4">
+        
+        <!-- Header -->
+        <div class="bg-white p-4 rounded-xl shadow-md mb-6 sticky top-0 z-50 border-b-4 border-blue-200">
+            <div class="flex flex-wrap gap-4 items-center justify-between">
+                <div class="flex gap-2 items-center flex-1">
+                    <span class="text-gray-600 font-bold whitespace-nowrap">班級 Class:</span>
+                    <input type="text" id="inputClass" class="border-2 border-gray-300 rounded px-2 py-1 w-20 focus:border-blue-500 outline-none text-lg">
+                </div>
+                <div class="flex gap-2 items-center flex-1">
+                    <span class="text-gray-600 font-bold whitespace-nowrap">號碼 No.:</span>
+                    <input type="number" id="inputNo" class="border-2 border-gray-300 rounded px-2 py-1 w-16 focus:border-blue-500 outline-none text-lg">
+                </div>
+                <div class="flex gap-2 items-center flex-[2]">
+                    <span class="text-gray-600 font-bold whitespace-nowrap">姓名 Name:</span>
+                    <input type="text" id="inputName" class="border-2 border-gray-300 rounded px-2 py-1 w-full focus:border-blue-500 outline-none text-lg">
+                </div>
+                <button onclick="restartSetup()" class="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 text-sm">
+                    <i class="fas fa-cog"></i> 重設
+                </button>
+            </div>
+        </div>
+
+        <!-- Question Container -->
+        <div id="questionsContainer" class="space-y-8"></div>
+
+        <!-- Footer Actions -->
+        <div class="mt-10 mb-20 flex flex-col md:flex-row gap-4 justify-center items-center">
+            <button onclick="downloadAll()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg flex items-center">
+                <i class="fas fa-download mr-2"></i> 下載全部成果 (Download All)
+            </button>
+            <button onclick="startGame()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg flex items-center">
+                <i class="fas fa-redo mr-2"></i> 再練習一次 (Practice Again)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const vocabularyDB = {
+            WW1: {
+                U1: [ {en: "one", zh: "一"}, {en: "two", zh: "二"}, {en: "three", zh: "三"}, {en: "four", zh: "四"}, {en: "five", zh: "五"}, {en: "six", zh: "六"}, {en: "seven", zh: "七"}, {en: "eight", zh: "八"}, {en: "nine", zh: "九"}, {en: "ten", zh: "十"} ],
+                U2: [ {en: "happy", zh: "快樂的"}, {en: "sad", zh: "傷心的"}, {en: "angry", zh: "生氣的"}, {en: "hungry", zh: "餓的"}, {en: "thirsty", zh: "口渴的"}, {en: "tired", zh: "累的"}, {en: "sick", zh: "生病的"} ],
+                U3: [ {en: "doll", zh: "洋娃娃"}, {en: "ball", zh: "球"}, {en: "kite", zh: "風箏"}, {en: "robot", zh: "機器人"}, {en: "car", zh: "車子"}, {en: "yo-yo", zh: "溜溜球"} ],
+                U4: [ {en: "red", zh: "紅色"}, {en: "blue", zh: "藍色"}, {en: "yellow", zh: "黃色"}, {en: "green", zh: "綠色"}, {en: "orange", zh: "橘色"}, {en: "purple", zh: "紫色"}, {en: "pink", zh: "粉紅色"}, {en: "black", zh: "黑色"}, {en: "white", zh: "白色"} ]
+            },
+            WW2: {
+                U1: [ {en: "cat", zh: "貓"}, {en: "dog", zh: "狗"}, {en: "bird", zh: "鳥"}, {en: "rabbit", zh: "兔子"}, {en: "fish", zh: "魚"}, {en: "turtle", zh: "烏龜"}, {en: "frog", zh: "青蛙"} ],
+                U2: [ {en: "swim", zh: "游泳"}, {en: "run", zh: "跑"}, {en: "jump", zh: "跳"}, {en: "dance", zh: "跳舞"}, {en: "sing", zh: "唱歌"}, {en: "draw", zh: "畫畫"} ],
+                U3: [ {en: "dad", zh: "爸爸"}, {en: "mom", zh: "媽媽"}, {en: "brother", zh: "哥哥/弟弟"}, {en: "sister", zh: "姊姊/妹妹"}, {en: "grandpa", zh: "爺爺/外公"}, {en: "grandma", zh: "奶奶/外婆"}, {en: "family", zh: "家庭"} ],
+                U4: [ {en: "cook", zh: "廚師"}, {en: "doctor", zh: "醫生"}, {en: "nurse", zh: "護理師"}, {en: "teacher", zh: "老師"}, {en: "student", zh: "學生"} ]
+            },
+            WW3: {
+                U1: [ {en: "sunny", zh: "晴朗的"}, {en: "rainy", zh: "下雨的"}, {en: "cloudy", zh: "多雲的"}, {en: "windy", zh: "颳風的"}, {en: "hot", zh: "熱的"}, {en: "cold", zh: "冷的"} ],
+                U2: [ {en: "eleven", zh: "十一"}, {en: "twelve", zh: "十二"}, {en: "twenty", zh: "二十"}, {en: "thirty", zh: "三十"}, {en: "forty", zh: "四十"}, {en: "fifty", zh: "五十"} ],
+                U3: [ {en: "pen", zh: "原子筆"}, {en: "pencil", zh: "鉛筆"}, {en: "ruler", zh: "尺"}, {en: "eraser", zh: "橡皮擦"}, {en: "book", zh: "書"}, {en: "marker", zh: "麥克筆"} ],
+                U4: [ {en: "on", zh: "在...上面"}, {en: "in", zh: "在...裡面"}, {en: "under", zh: "在...下面"}, {en: "box", zh: "箱子"}, {en: "chair", zh: "椅子"}, {en: "desk", zh: "書桌"}, {en: "where", zh: "哪裡"} ]
+            },
+            WW4: {
+                U1: [ {en: "kitchen", zh: "廚房"}, {en: "living room", zh: "客廳"}, {en: "bedroom", zh: "臥室"}, {en: "bathroom", zh: "浴室"}, {en: "dining room", zh: "飯廳"}, {en: "yard", zh: "庭院"} ],
+                U2: [ {en: "cook", zh: "煮飯"}, {en: "eat", zh: "吃"}, {en: "sleep", zh: "睡覺"}, {en: "read", zh: "閱讀"}, {en: "write", zh: "寫字"}, {en: "run", zh: "跑"} ],
+                U3: [ {en: "hamburger", zh: "漢堡"}, {en: "hot dog", zh: "熱狗"}, {en: "sandwich", zh: "三明治"}, {en: "juice", zh: "果汁"}, {en: "milk", zh: "牛奶"}, {en: "ice cream", zh: "冰淇淋"}, {en: "soup", zh: "湯"} ],
+                U4: [ {en: "zoo", zh: "動物園"}, {en: "lion", zh: "獅子"}, {en: "tiger", zh: "老虎"}, {en: "elephant", zh: "大象"}, {en: "monkey", zh: "猴子"}, {en: "zebra", zh: "斑馬"}, {en: "bear", zh: "熊"} ]
+            }
+        };
+
+        const colors = [
+            { name: 'Black', hex: '#000000', class: 'bg-black' },
+            { name: 'Red', hex: '#EF4444', class: 'bg-red-500' },
+            { name: 'Blue', hex: '#3B82F6', class: 'bg-blue-500' },
+            { name: 'Green', hex: '#10B981', class: 'bg-green-500' },
+            { name: 'Purple', hex: '#8B5CF6', class: 'bg-purple-500' },
+            { name: 'Pink', hex: '#EC4899', class: 'bg-pink-500' },
+            { name: 'Yellow', hex: '#F59E0B', class: 'bg-yellow-500' }
+        ];
+
+        let canvasRegistry = {};
+
+        // --- SETUP LOGIC ---
+
+        function restartSetup() {
+            document.getElementById('setupScreen').classList.remove('hidden');
+            document.getElementById('appScreen').classList.add('hidden');
+            window.scrollTo(0,0);
+        }
+
+        function startGame() {
+            const selectedBooks = Array.from(document.querySelectorAll('.book-select:checked')).map(cb => cb.value);
+            const selectedUnits = Array.from(document.querySelectorAll('.unit-select:checked')).map(cb => cb.value);
+
+            if (selectedBooks.length === 0 || selectedUnits.length === 0) {
+                document.getElementById('errorMsg').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('errorMsg').classList.add('hidden');
+
+            // Gather Words
+            let pool = [];
+            selectedBooks.forEach(book => {
+                selectedUnits.forEach(unit => {
+                    if (vocabularyDB[book] && vocabularyDB[book][unit]) {
+                        pool = pool.concat(vocabularyDB[book][unit]);
+                    }
+                });
+            });
+
+            if (pool.length < 5) {
+                while (pool.length < 5) pool = pool.concat(pool);
+            }
+
+            // Random Select
+            const selectedWords = [];
+            const usedIndices = new Set();
+            while (selectedWords.length < 5) {
+                const idx = Math.floor(Math.random() * pool.length);
+                if (!usedIndices.has(idx)) {
+                    usedIndices.add(idx);
+                    selectedWords.push(pool[idx]);
+                }
+            }
+
+            // Show Screen FIRST to ensure layout
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('appScreen').classList.remove('hidden');
+            window.scrollTo(0, 0);
+
+            // Render Questions
+            renderQuestions(selectedWords);
+        }
+
+        function renderQuestions(words) {
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = '';
+            canvasRegistry = {};
+
+            words.forEach((wordObj, index) => {
+                const qId = index + 1;
+                const html = `
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+                    <div class="bg-blue-50 p-3 border-b border-blue-100 flex justify-between items-center">
+                        <div class="flex items-center">
+                            <span class="bg-blue-600 text-white font-bold rounded-full w-8 h-8 flex items-center justify-center mr-3">${qId}</span>
+                            <span class="text-2xl font-bold text-gray-800 tracking-wide">${wordObj.zh}</span>
+                        </div>
+                        <div class="text-sm text-gray-400 font-mono hidden md:block">Answer: ${wordObj.en}</div>
+                    </div>
+
+                    <!-- Dual Layer Canvas Wrapper -->
+                    <div class="p-2 md:p-4 bg-gray-50 flex justify-center">
+                        <div class="canvas-wrapper w-full max-w-[800px]" id="wrapper-${qId}">
+                            <!-- Bottom: Lines -->
+                            <canvas id="bg-canvas-${qId}" class="canvas-bg"></canvas>
+                            <!-- Top: Drawing -->
+                            <canvas id="draw-canvas-${qId}" class="canvas-draw"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-3 border-t border-gray-100 flex flex-wrap gap-4 justify-between items-center">
+                        <div class="flex gap-2 items-center flex-wrap" id="palette-${qId}">
+                            ${colors.map(c => `
+                                <div class="color-dot ${c.class}" data-color="${c.hex}" onclick="setPenColor(${qId}, '${c.hex}', this)" title="${c.name}"></div>
+                            `).join('')}
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="setEraser(${qId}, this)" class="tool-btn bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg flex items-center" title="橡皮擦 Eraser">
+                                <i class="fas fa-eraser mr-1"></i> Eraser
+                            </button>
+                            <!-- Replaced onclick with handleDelete() for 2-step deletion -->
+                            <button id="btn-del-${qId}" onclick="handleDelete(${qId})" class="tool-btn bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg flex items-center" title="全部清除 Del">
+                                <i class="fas fa-trash-alt mr-1"></i> Del
+                            </button>
+                            <button onclick="downloadSingle(${qId})" class="tool-btn bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg flex items-center ml-2" title="下載此題 Save">
+                                <i class="fas fa-download mr-1"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+                initCanvas(qId);
+            });
+        }
+
+        // --- CANVAS LOGIC ---
+
+        function initCanvas(id) {
+            const wrapper = document.getElementById(`wrapper-${id}`);
+            const bgCanvas = document.getElementById(`bg-canvas-${id}`);
+            const drawCanvas = document.getElementById(`draw-canvas-${id}`);
+            
+            // Get precise CSS dimensions
+            const rect = wrapper.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Set actual pixel dimensions based on DPR
+            [bgCanvas, drawCanvas].forEach(c => {
+                c.width = rect.width * dpr;
+                c.height = rect.height * dpr;
+            });
+
+            const bgCtx = bgCanvas.getContext('2d');
+            const drawCtx = drawCanvas.getContext('2d');
+
+            // Draw Background Lines immediately
+            drawLines(bgCtx, bgCanvas.width, bgCanvas.height);
+
+            // State
+            const state = {
+                id,
+                bgCanvas,
+                drawCanvas,
+                bgCtx,
+                drawCtx,
+                isDrawing: false,
+                color: '#000000',
+                lineWidth: 3 * dpr, // Scale line width for high DPI
+                mode: 'draw', 
+                lastX: 0,
+                lastY: 0
+            };
+            
+            canvasRegistry[id] = state;
+            
+            // Set initial active color UI
+            const palette = document.getElementById(`palette-${id}`);
+            if(palette && palette.children[0]) {
+                palette.children[0].classList.add('active');
+            }
+
+            // Event Binding (Only on Top Canvas)
+            bindEvents(drawCanvas, state);
+        }
+
+        function drawLines(ctx, width, height) {
+            ctx.clearRect(0, 0, width, height);
+            
+            // White bg
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+
+            const lineHeight = height / 5; 
+            const startY = (height - (lineHeight * 3)) / 2; 
+
+            const line1 = startY;
+            const line2 = startY + lineHeight;
+            const line3 = startY + lineHeight * 2;
+            const line4 = startY + lineHeight * 3;
+
+            const padding = 20 * (window.devicePixelRatio || 1);
+
+            ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+            
+            // Line 1: Black Solid
+            ctx.beginPath();
+            ctx.moveTo(padding, line1);
+            ctx.lineTo(width - padding, line1);
+            ctx.strokeStyle = '#000000';
+            ctx.setLineDash([]);
+            ctx.stroke();
+
+            // Line 2: Black Solid
+            ctx.beginPath();
+            ctx.moveTo(padding, line2);
+            ctx.lineTo(width - padding, line2);
+            ctx.strokeStyle = '#000000';
+            ctx.setLineDash([]);
+            ctx.stroke();
+
+            // Line 3: Red Dashed
+            ctx.beginPath();
+            ctx.moveTo(padding, line3);
+            ctx.lineTo(width - padding, line3);
+            ctx.strokeStyle = '#ff0000';
+            ctx.setLineDash([10, 10]); 
+            ctx.stroke();
+
+            // Line 4: Black Solid
+            ctx.beginPath();
+            ctx.moveTo(padding, line4);
+            ctx.lineTo(width - padding, line4);
+            ctx.strokeStyle = '#000000';
+            ctx.setLineDash([]);
+            ctx.stroke();
+        }
+
+        function getPrecisePos(e, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            // Calculate scale based on actual bitmap size vs CSS size
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+            const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function bindEvents(canvas, state) {
+            const start = (e) => {
+                // Prevent scrolling if touching canvas
+                if(e.type === 'touchstart') e.preventDefault();
+                
+                state.isDrawing = true;
+                const pos = getPrecisePos(e, canvas);
+                state.lastX = pos.x;
+                state.lastY = pos.y;
+                draw(e, state); // Draw dot
+            };
+
+            const move = (e) => {
+                if(e.type === 'touchmove') e.preventDefault();
+                if (!state.isDrawing) return;
+                draw(e, state);
+            };
+
+            const end = () => { state.isDrawing = false; };
+
+            canvas.addEventListener('mousedown', start);
+            canvas.addEventListener('mousemove', move);
+            canvas.addEventListener('mouseup', end);
+            canvas.addEventListener('mouseout', end);
+
+            canvas.addEventListener('touchstart', start, {passive: false});
+            canvas.addEventListener('touchmove', move, {passive: false});
+            canvas.addEventListener('touchend', end);
+        }
+
+        function draw(e, state) {
+            const pos = getPrecisePos(e, state.drawCanvas);
+            const ctx = state.drawCtx;
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = state.lineWidth;
+
+            if (state.mode === 'eraser') {
+                // Magic: Destination-out makes pixels transparent
+                // This reveals the background canvas underneath
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for dest-out
+                ctx.lineWidth = state.lineWidth * 8; // Eraser bigger
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = state.color;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(state.lastX, state.lastY);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+
+            state.lastX = pos.x;
+            state.lastY = pos.y;
+        }
+
+        // --- ACTIONS ---
+
+        function setPenColor(id, hex, el) {
+            const state = canvasRegistry[id];
+            if (!state) return;
+            state.mode = 'draw';
+            state.color = hex;
+
+            // UI
+            const palette = document.getElementById(`palette-${id}`);
+            Array.from(palette.children).forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+
+            // Reset eraser
+            const container = document.getElementById(`wrapper-${id}`).parentElement.nextElementSibling;
+            const eraserBtn = container.querySelector('button[title="橡皮擦 Eraser"]');
+            eraserBtn.classList.remove('bg-gray-300', 'ring-2', 'ring-gray-400');
+            eraserBtn.classList.add('bg-gray-100');
+        }
+
+        function setEraser(id, el) {
+            const state = canvasRegistry[id];
+            if (!state) return;
+            state.mode = 'eraser';
+
+            // UI
+            const palette = document.getElementById(`palette-${id}`);
+            Array.from(palette.children).forEach(c => c.classList.remove('active'));
+
+            el.classList.remove('bg-gray-100');
+            el.classList.add('bg-gray-300', 'ring-2', 'ring-gray-400');
+        }
+
+        // New Two-Step Delete Handler (No confirm() used)
+        function handleDelete(id) {
+            const btn = document.getElementById(`btn-del-${id}`);
+            
+            // Check if already in confirm mode
+            if (btn.getAttribute('data-confirm') === 'true') {
+                // EXECUTE DELETE
+                const state = canvasRegistry[id];
+                if (state) {
+                    state.drawCtx.clearRect(0, 0, state.drawCanvas.width, state.drawCanvas.height);
+                }
+                
+                // Reset UI
+                btn.setAttribute('data-confirm', 'false');
+                btn.innerHTML = '<i class="fas fa-trash-alt mr-1"></i> Del';
+                btn.className = "tool-btn bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg flex items-center";
+            } else {
+                // ENTER CONFIRM MODE
+                btn.setAttribute('data-confirm', 'true');
+                btn.innerHTML = '<i class="fas fa-check mr-1"></i> 確定?';
+                btn.className = "tool-btn bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg flex items-center shadow-lg transform scale-105 transition-all duration-200";
+                
+                // Auto-reset after 3s
+                setTimeout(() => {
+                    if(btn && btn.getAttribute('data-confirm') === 'true') {
+                        btn.setAttribute('data-confirm', 'false');
+                        btn.innerHTML = '<i class="fas fa-trash-alt mr-1"></i> Del';
+                        btn.className = "tool-btn bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg flex items-center";
+                    }
+                }, 3000);
+            }
+        }
+
+        // --- DOWNLOAD ---
+
+        function getStudentInfo() {
+            const c = document.getElementById('inputClass').value || '';
+            const n = document.getElementById('inputNo').value || '';
+            const nm = document.getElementById('inputName').value || '';
+            return c && n ? `${c}-${n} ${nm}` : (nm || 'Student');
+        }
+
+        // Helper to merge layers for download
+        function getMergedCanvas(id) {
+            const state = canvasRegistry[id];
+            const merged = document.createElement('canvas');
+            merged.width = state.bgCanvas.width;
+            merged.height = state.bgCanvas.height;
+            const ctx = merged.getContext('2d');
+
+            // Draw white bg
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0,0, merged.width, merged.height);
+            // Draw lines
+            ctx.drawImage(state.bgCanvas, 0, 0);
+            // Draw ink
+            ctx.drawImage(state.drawCanvas, 0, 0);
+            
+            return merged;
+        }
+
+        function downloadSingle(id) {
+            const merged = getMergedCanvas(id);
+            const link = document.createElement('a');
+            const info = getStudentInfo();
+            
+            // Add Title
+            const final = document.createElement('canvas');
+            final.width = merged.width;
+            final.height = merged.height + 60;
+            const ctx = final.getContext('2d');
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0,0, final.width, final.height);
+            
+            // Text
+            const qEl = document.getElementById(`wrapper-${id}`).parentElement.previousElementSibling;
+            const qText = qEl.querySelector('span:nth-child(2)').innerText;
+            
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold ${20 * window.devicePixelRatio}px sans-serif`;
+            ctx.fillText(`${info} - Q${id}: ${qText}`, 20, 40);
+            
+            ctx.drawImage(merged, 0, 60);
+
+            link.download = `${info}_Q${id}.jpg`;
+            link.href = final.toDataURL('image/jpeg', 0.9);
+            link.click();
+        }
+
+        function downloadAll() {
+            const keys = Object.keys(canvasRegistry);
+            if(keys.length === 0) return;
+            const info = getStudentInfo();
+
+            // Calculate height
+            const sample = canvasRegistry[keys[0]].bgCanvas;
+            const w = sample.width;
+            const h = sample.height;
+            const headerH = 120;
+            const qH = 60;
+            const gap = 30;
+
+            const totalH = headerH + (keys.length * (h + qH + gap)) + 50;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = totalH;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, totalH);
+
+            // Header
+            ctx.fillStyle = '#1e3a8a';
+            ctx.fillRect(0, 0, w, headerH);
+            ctx.fillStyle = '#ffffff';
+            const scale = window.devicePixelRatio || 1;
+            ctx.font = `bold ${36 * scale}px "Noto Sans TC"`;
+            ctx.fillText("國小英語單字練習", 40, 60);
+            ctx.font = `${24 * scale}px "Noto Sans TC"`;
+            ctx.fillText(`Student: ${info}`, 40, 100);
+
+            let y = headerH + 20;
+
+            keys.forEach(key => {
+                const merged = getMergedCanvas(key);
+                
+                // Question Title
+                const qEl = document.getElementById(`wrapper-${key}`).parentElement.previousElementSibling;
+                const qText = qEl.querySelector('span:nth-child(2)').innerText;
+                const qNum = qEl.querySelector('span:first-child').innerText;
+
+                ctx.fillStyle = '#f3f4f6';
+                ctx.fillRect(20, y, w - 40, qH);
+                ctx.fillStyle = '#000000';
+                ctx.font = `bold ${28 * scale}px sans-serif`;
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`Q${qNum}. ${qText}`, 40, y + (qH/2));
+
+                y += qH;
+                
+                // Canvas
+                ctx.drawImage(merged, 0, y);
+                
+                // Border
+                ctx.strokeStyle = '#9ca3af';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(0, y, w, h);
+
+                y += h + gap;
+            });
+
+            const link = document.createElement('a');
+            link.download = `${info}_Practice_All.jpg`;
+            link.href = canvas.toDataURL('image/jpeg', 0.85);
+            link.click();
+        }
+    </script>
+</body>
+</html>
